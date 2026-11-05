@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExceptionController;
 use App\Http\Controllers\Api\ExternalController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\TrackingController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Data live dari API luar (semua user yang login)
     Route::get('/rates', [ExternalController::class, 'rates']);
     Route::get('/news', [ExternalController::class, 'news']);
+
+    // Notifikasi (milik user sendiri)
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
