@@ -54,5 +54,7 @@ class DatabaseSeeder extends Seeder
                 ['latitude' => $lat, 'longitude' => $lng]
             );
         }
+
+        $this->call(DemoShipmentSeeder::class);
     }
 }
