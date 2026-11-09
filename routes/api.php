@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Data live dari API luar (semua user yang login)
     Route::get('/rates', [ExternalController::class, 'rates']);
+    Route::get('/weather', [ExternalController::class, 'weather']);
     Route::get('/news', [ExternalController::class, 'news']);
 
     // Notifikasi (milik user sendiri)

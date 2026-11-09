@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,24 @@ class ExternalController extends Controller
     public function news(): JsonResponse
     {
         return $this->cachedFetch('shipping_news', 900, fn () => $this->fetchNews());
+    }
+
+    // Cuaca di lokasi shipment (Open-Meteo, tanpa API key). Hanya informasi, bukan prediksi delay.
+    public function weather(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lon' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $lat = round((float) $v['lat'], 2);
+        $lon = round((float) $v['lon'], 2);
+
+        return $this->cachedFetch(
+            sprintf('weather_%s_%s', $lat, $lon),
+            1800,
+            fn () => $this->fetchWeather($lat, $lon)
+        );
     }
 
     // Pakai cache; kalau API gagal, kembalikan data terakhir yang berhasil (stale).
@@ -56,6 +75,38 @@ class ExternalController extends Controller
                 'message' => 'External service unavailable. Please try again later.',
             ], 503);
         }
+    }
+
+    private function fetchWeather(float $lat, float $lon): array
+    {
+        $json = Http::withOptions(['verify' => self::VERIFY_SSL])
+            ->timeout(8)
+            ->retry(2, 300)
+            ->get('https://api.open-meteo.com/v1/forecast', [
+                'latitude' => $lat,
+                'longitude' => $lon,
+                'current' => 'temperature_2m,wind_speed_10m,precipitation,weather_code',
+                'timezone' => 'UTC',
+            ])
+            ->throw()
+            ->json();
+
+        $c = $json['current'] ?? null;
+
+        if (! is_array($c) || ! isset($c['temperature_2m'])) {
+            throw new \RuntimeException('Unexpected response from weather API.');
+        }
+
+        return [
+            'latitude' => $lat,
+            'longitude' => $lon,
+            'temperature_c' => $c['temperature_2m'],
+            'wind_kmh' => $c['wind_speed_10m'] ?? null,
+            'precipitation_mm' => $c['precipitation'] ?? null,
+            'weather_code' => $c['weather_code'] ?? null,
+            'observed_at' => $c['time'] ?? null,
+            'source' => 'Open-Meteo',
+        ];
     }
 
     private function fetchRates(): array
