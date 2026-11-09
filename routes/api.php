@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CarrierController;
 use App\Http\Controllers\Api\DashboardController;
@@ -31,6 +32,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware('role:admin,operator');
+
+    // Audit log: admin saja
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->middleware('role:admin');
 
     // Carriers: lihat = admin & operator, kelola = admin saja
     Route::apiResource('carriers', CarrierController::class)

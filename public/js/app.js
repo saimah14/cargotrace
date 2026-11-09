@@ -10,6 +10,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const fmt=x=>x?new Date(x).toLocaleString():'-';
 const num=x=>Number(x).toLocaleString('id-ID',{maximumFractionDigits:2});
 const isStaff=()=>me&&['admin','operator'].includes(me.role);
+const isAdmin=()=>me&&me.role==='admin';
 const errText=e=>e.data&&e.data.errors?Object.values(e.data.errors).flat().join(' '):e.message;
 
 async function api(path,opts={}){
@@ -68,7 +69,9 @@ function start(){
   $('app').classList.remove('hide');
   $('who').textContent=me.name+' ('+me.role+')';
   $('dashCard').classList.toggle('hide',!isStaff());
+  $('auditCard').classList.toggle('hide',!isAdmin());
   if(isStaff()){loadDashboard();loadLocs();}
+  if(isAdmin())loadAudit();
   loadShipments(1);loadRates();loadNews();loadNotifs();loadMap();
 }
 
@@ -84,6 +87,18 @@ async function loadDashboard(){
     drawCharts(d);
     drawCarrierChart(d);
   }catch(e){$('stats').textContent=e.message;}
+}
+
+/* ---------- Audit log (admin only) ---------- */
+async function loadAudit(){
+  try{
+    const d=await api('/audit-logs');
+    $('auditRows').innerHTML=d.data.length?d.data.map(a=>{
+      const entity=String(a.entity_type||'').split('\\').pop();
+      const changes=a.changes?JSON.stringify(a.changes):'';
+      return `<tr><td>${esc(fmt(a.created_at))}</td><td>${esc(a.user?a.user.name:'system')}</td><td>${esc(a.action)}</td><td>${esc(entity)} #${esc(a.entity_id)}</td><td style="white-space:normal;max-width:360px;word-break:break-all"><small>${esc(changes)}</small></td></tr>`;
+    }).join(''):'<tr><td colspan="5">No audit records yet.</td></tr>';
+  }catch(e){$('auditRows').innerHTML='<tr><td colspan="5" class="err">'+esc(e.message)+'</td></tr>';}
 }
 
 /* ---------- Charts (Chart.js) ---------- */
@@ -301,6 +316,7 @@ $('detail').addEventListener('click',async e=>{
     await call;
     loadShipments();loadNotifs();
     if(isStaff())loadDashboard();
+    if(isAdmin())loadAudit();
     openDetail(id,true);
   }catch(err){
     if($('actMsg'))$('actMsg').textContent=errText(err);

@@ -115,6 +115,16 @@
       <ul id="notifs"></ul>
     </div>
 
+    <div id="auditCard" class="card hide">
+      <h2>Audit log <small>(admin only)</small></h2>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Entity</th><th>Changes</th></tr></thead>
+          <tbody id="auditRows"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Shipping news</h2>
       <ul id="news"><li>Loading...</li></ul>
