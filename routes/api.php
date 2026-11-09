@@ -67,13 +67,19 @@ Route::middleware('auth:sanctum')->group(function () {
         ->only(['destroy'])
         ->middleware('role:admin');
 
-    // Tracking
-    Route::get('shipments/{shipment}/events', [TrackingController::class, 'index']);
+    // Tracking (path baru sesuai brief)
+    Route::get('shipments/{shipment}/tracking', [TrackingController::class, 'index']);
 
-    Route::post('shipments/{shipment}/status', [TrackingController::class, 'updateStatus'])
+    Route::post('shipments/{shipment}/tracking', [TrackingController::class, 'store'])
         ->middleware('role:admin,operator');
 
+    // Tracking (path lama dipertahankan supaya frontend tidak rusak)
+    Route::get('shipments/{shipment}/events', [TrackingController::class, 'index']);
+
     Route::post('shipments/{shipment}/events', [TrackingController::class, 'store'])
+        ->middleware('role:admin,operator');
+
+    Route::post('shipments/{shipment}/status', [TrackingController::class, 'updateStatus'])
         ->middleware('role:admin,operator');
 
     // Exceptions
@@ -82,6 +88,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('shipments/{shipment}/exceptions', [ExceptionController::class, 'store'])
         ->middleware('role:admin,operator');
 
+    // Path baru sesuai brief
+    Route::patch('exceptions/{exception}', [ExceptionController::class, 'updateStatus'])
+        ->middleware('role:admin,operator');
+
+    // Path lama dipertahankan
     Route::patch('exceptions/{exception}/status', [ExceptionController::class, 'updateStatus'])
         ->middleware('role:admin,operator');
 });

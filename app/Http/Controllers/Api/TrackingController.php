@@ -35,6 +35,7 @@ class TrackingController extends Controller
 
         $events = $shipment->trackingEvents()
             ->with('location:id,name,country')
+            ->orderBy('occurred_at')
             ->get();
 
         return response()->json($events);
