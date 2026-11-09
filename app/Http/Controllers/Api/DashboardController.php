@@ -36,6 +36,11 @@ class DashboardController extends Controller
             ->groupBy('type')
             ->pluck('total', 'type');
 
+        $byCarrier = Shipment::join('carriers', 'carriers.id', '=', 'shipments.carrier_id')
+            ->select('carriers.name', DB::raw('COUNT(*) as total'))
+            ->groupBy('carriers.name')
+            ->pluck('total', 'name');
+
         $recent = Shipment::with('carrier:id,name,code')
             ->latest()
             ->limit(5)
@@ -49,6 +54,7 @@ class DashboardController extends Controller
                 ->count(),
             'open_exceptions' => (clone $openExceptions)->count(),
             'open_exceptions_by_type' => $exceptionsByType,
+            'shipments_by_carrier' => $byCarrier,
             'recent_shipments' => $recent,
         ]);
     }

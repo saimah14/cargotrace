@@ -77,6 +77,7 @@
       <div class="charts">
         <div><canvas id="chStatus"></canvas></div>
         <div><canvas id="chDelay"></canvas></div>
+        <div><canvas id="chCarrier"></canvas></div>
       </div>
     </div>
 

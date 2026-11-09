@@ -4,7 +4,7 @@ const NEXT={CREATED:'BOOKED',BOOKED:'PICKED_UP',PICKED_UP:'IN_TRANSIT',IN_TRANSI
 const TYPES=['CUSTOMS_HOLD','WEATHER_DELAY','PORT_CONGESTION','DAMAGED','MISROUTED','DOCUMENTATION_ISSUE'];
 let token=localStorage.getItem('ct_token');
 let me=null,locs=[],page=1,selectedId=null,map,layer;
-let chStatus=null,chDelay=null;
+let chStatus=null,chDelay=null,chCarrier=null;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x?new Date(x).toLocaleString():'-';
@@ -82,6 +82,7 @@ async function loadDashboard(){
     const items=[['Total',d.total_shipments],...Object.entries(d.shipments_by_status),['Delayed',d.delayed_shipments],['Open exceptions',d.open_exceptions]];
     $('stats').innerHTML=items.map(([k,v])=>`<div class="stat"><b>${esc(v)}</b>${esc(k.replace('_',' '))}</div>`).join('');
     drawCharts(d);
+    drawCarrierChart(d);
   }catch(e){$('stats').textContent=e.message;}
 }
 
@@ -104,6 +105,17 @@ function drawCharts(d){
     type:'doughnut',
     data:{labels:['Not delayed','Delayed'],datasets:[{data:[Math.max(0,total-delayed),delayed],backgroundColor:['#2f855a','#a61b1b']}]},
     options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Delay rate: '+rate+'% | Open exceptions: '+(d.open_exceptions||0)}}}
+  });
+}
+
+function drawCarrierChart(d){
+  if(typeof Chart==='undefined')return;
+  if(chCarrier)chCarrier.destroy();
+  const c=d.shipments_by_carrier||{};
+  chCarrier=new Chart($('chCarrier'),{
+    type:'bar',
+    data:{labels:Object.keys(c),datasets:[{data:Object.values(c),backgroundColor:'#2f855a'}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Shipments by carrier'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
   });
 }
 
