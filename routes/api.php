@@ -3,13 +3,14 @@
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CarrierController;
-use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExceptionController;
 use App\Http\Controllers\Api\ExternalController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ShipmentController;
+use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\TrackingController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -21,6 +22,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Data live dari API luar (semua user yang login)
     Route::get('/rates', [ExternalController::class, 'rates']);
+    Route::get('/currencies', [StatsController::class, 'currencies']);
     Route::get('/weather', [ExternalController::class, 'weather']);
     Route::get('/news', [ExternalController::class, 'news']);
 
@@ -29,12 +31,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
-    // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])
+    // Dashboard (JSON untuk kartu angka dan grafik)
+    Route::get('/dashboard', [StatsController::class, 'dashboard'])
         ->middleware('role:admin,operator');
 
     // Audit log: admin saja
     Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->middleware('role:admin');
+
+    // User & role: admin saja
+    Route::get('/users', [UserController::class, 'index'])
+        ->middleware('role:admin');
+
+    Route::patch('/users/{user}/role', [UserController::class, 'updateRole'])
         ->middleware('role:admin');
 
     // Carriers: lihat = admin & operator, kelola = admin saja
