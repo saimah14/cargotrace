@@ -5,13 +5,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Api\DashboardController;
 
-// 1. Halaman utama: peta + tabel + kurs + notifikasi (login sendiri lewat API)
 Route::view('/', 'app')->name('dashboard');
 
-// 1b. Dashboard lama (cadangan, tidak dipakai lagi)
 Route::get('/dashboard-lama', [DashboardController::class, 'index'])->name('dashboard.lama');
 
-// 2. Halaman Login (Tampilan Form Login)
 Route::get('/login', function () {
     if (Auth::check()) {
         return redirect('/');
@@ -64,29 +61,30 @@ Route::get('/login', function () {
     ');
 })->name('login');
 
-// 3. Proses Login POST
 Route::post('/login', function (Request $request) {
-    $credentials =$request->validate([
+    $credentials = $request->validate([
         'email' => ['required', 'email'],
         'password' => ['required'],
     ]);
 
-    if (Auth::attempt($credentials)) {$request->session()->regenerate();
+    if (Auth::attempt($credentials)) {
+        $request->session()->regenerate();
         return redirect('/');
     }
 
     return back()->with('error', 'Email atau password salah!');
 })->name('login.post');
 
-// 4. Logout (Mengarahkan balik ke /login)
 Route::post('/logout', function (Request $request) {
     Auth::logout();
-    $request->session()->invalidate();$request->session()->regenerateToken();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
     return redirect()->route('login');
 })->name('logout');
 
 Route::get('/logout', function (Request $request) {
     Auth::logout();
-    $request->session()->invalidate();$request->session()->regenerateToken();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
     return redirect()->route('login');
 });

@@ -795,5 +795,313 @@
         }
         window.addEventListener('load', initDash);
     </script>
+    @include('partials.operator-admin-tools')
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+  const applyRoleVisibility = () => {
+    const bodyText = document.body.innerText || '';
+    const isOperator = /LOGISTICS\s*OPERATOR/i.test(bodyText);
+    const isAdmin = /ADMINISTRATOR/i.test(bodyText);
+    const isCustomer = /CUSTOMER/i.test(bodyText) && !isOperator && !isAdmin;
+
+    const addBtn = Array.from(document.querySelectorAll('button, a')).find(el =>
+      /tambah\s*kiriman\s*barang/i.test((el.textContent || '').trim())
+    );
+
+    if (addBtn) {
+      addBtn.style.display = (isOperator || isAdmin) ? '' : 'none';
+    }
+  };
+
+  applyRoleVisibility();
+  const obs = new MutationObserver(applyRoleVisibility);
+  obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const markDelays = () => {
+    const rows = document.querySelectorAll('table tbody tr, [data-shipment-row], .shipment-row');
+    rows.forEach(row => {
+      if (row.dataset.delayChecked === '1') return;
+      const txt = row.innerText || '';
+      const hasDelayKeyword = /terlambat|delay|kendala|exception|eta:\s*\d+\s*nov\s*2026/i.test(txt);
+      if (hasDelayKeyword && !row.querySelector('.ct-delay-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'ct-delay-badge';
+        badge.textContent = 'Info Keterlambatan';
+        badge.style.cssText = 'display:inline-block;margin-top:4px;padding:2px 6px;font-size:11px;font-weight:700;border-radius:4px;background:#fef3c7;color:#b45309;';
+        const target = row.querySelector('td:last-child') || row;
+        target.appendChild(badge);
+        row.dataset.delayChecked = '1';
+      }
+    });
+  };
+
+  markDelays();
+  const delayObs = new MutationObserver(markDelays);
+  delayObs.observe(document.body, { childList: true, subtree: true });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const pageText = document.body.innerText || '';
+  const isOperator = /LOGISTICS\s*OPERATOR/i.test(pageText);
+  const isAdmin = /ADMINISTRATOR/i.test(pageText);
+  const isStaff = isOperator || isAdmin;
+
+  // Sembunyikan tombol "+ Tambah Kiriman Barang" khusus saat role Customer (tanpa menyentuh saat Operator/Admin)
+  if (!isStaff) {
+    document.querySelectorAll('button, a').forEach(el => {
+      if (/tambah\s*kiriman\s*barang/i.test((el.textContent || '').trim())) {
+        el.style.display = 'none';
+      }
+    });
+  }
+
+  // Pasang info keterlambatan sekali per baris kiriman
+  const rows = Array.from(document.querySelectorAll('table tbody tr')).filter(
+    tr => !tr.closest('#ct-operator-suite')
+  );
+
+  let delayedCount = 0;
+
+  rows.forEach(row => {
+    if (row.dataset.delayDone === '1') return;
+    const rowText = row.innerText || '';
+    if (!/terlambat|delay|kendala|exception/i.test(rowText)) return;
+
+    delayedCount++;
+    row.dataset.delayDone = '1';
+    const targetCell = row.querySelector('td:last-child') || row;
+
+    const infoBox = document.createElement('div');
+    infoBox.className = 'ct-delay-box';
+    infoBox.style.cssText = 'margin-top:6px;padding:5px 8px;border-radius:6px;font-size:11px;line-height:1.35;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-weight:600;';
+    infoBox.textContent = isStaff
+      ? 'Keterlambatan: Perlu pembaruan ETA / tindak lanjut operasional.'
+      : 'Keterlambatan: Pengiriman mengalami keterlambatan jadwal.';
+    targetCell.appendChild(infoBox);
+
+    if (isStaff) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin-top:6px;display:flex;gap:4px;align-items:center;';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Catatan keterlambatan...';
+      input.style.cssText = 'flex:1;min-width:110px;padding:4px 6px;font-size:11px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Simpan';
+      btn.style.cssText = 'padding:4px 8px;font-size:11px;font-weight:700;border:none;border-radius:5px;background:#d97706;color:#fff;cursor:pointer;';
+
+      const note = document.createElement('span');
+      note.style.cssText = 'font-size:10px;color:#047857;font-weight:600;';
+
+      btn.addEventListener('click', () => {
+        const val = input.value.trim();
+        if (!val) return;
+        infoBox.textContent = `Keterlambatan: ${val}`;
+        note.textContent = 'Tersimpan';
+        input.value = '';
+      });
+
+      wrap.appendChild(input);
+      wrap.appendChild(btn);
+      wrap.appendChild(note);
+      targetCell.appendChild(wrap);
+    }
+  });
+
+  const firstTable = rows[0]?.closest('table');
+  if (isStaff && firstTable && firstTable.parentElement && !document.getElementById('ct-delay-summary-banner')) {
+    const banner = document.createElement('div');
+    banner.id = 'ct-delay-summary-banner';
+    banner.style.cssText = 'margin:10px 0 12px;padding:10px 14px;border-radius:8px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:12px;font-weight:600;';
+    banner.textContent = delayedCount > 0
+      ? `Ringkasan Keterlambatan (${isAdmin ? 'Administrator' : 'Logistics Operator'}): ${delayedCount} kiriman terdeteksi terlambat/berkendala.`
+      : `Ringkasan Keterlambatan (${isAdmin ? 'Administrator' : 'Logistics Operator'}): Belum ada kiriman terlambat pada daftar aktif.`;
+    firstTable.parentElement.insertBefore(banner, firstTable);
+  }
+});
+</script>
+<script>
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('button, a');
+  if (!btn) return;
+  const txt = (btn.innerText || btn.textContent || '').trim();
+  if (!/tambah\s*kiriman\s*barang/i.test(txt)) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  let modal = document.getElementById('ct-full-add-shipment-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'ct-full-add-shipment-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;overflow-y:auto;';
+
+    const genResi = () => `CT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,.25);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <strong style="font-size:15px;color:#0f172a;">Tambah Kiriman Barang</strong>
+          <button type="button" id="ct-close-full-add" style="border:none;background:#f1f5f9;color:#0f172a;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700;">✕</button>
+        </div>
+        <form id="ct-full-add-form" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <label style="display:block;font-size:11px;color:#475569;margin-bottom:2px;">No. Resi (Otomatis)</label>
+            <input type="text" name="shipment_number" id="ct-resi-input" required value="${genResi()}" style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;color:#475569;margin-bottom:2px;">Moda Pengiriman</label>
+            <select name="transport_mode" id="ct-mode-select" required style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;background:#fff;">
+              <option value="Kapal (Sea Freight)">Kapal (Sea Freight)</option>
+              <option value="Pesawat (Air Cargo)">Pesawat (Air Cargo)</option>
+            </select>
+          </div>
+
+          <input type="text" name="sender_name" required placeholder="Nama Pengirim" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="sender_phone" required placeholder="Nomor HP Pengirim" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="origin_from" required placeholder="Dari Mana (cth: Medan)" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="origin_address" required placeholder="Alamat Lengkap Pengirim" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+
+          <input type="text" name="receiver_name" required placeholder="Nama Penerima" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="receiver_phone" required placeholder="Nomor HP Penerima" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="destination_to" required placeholder="Ke Mana (cth: Jakarta)" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          <input type="text" name="destination_address" required placeholder="Alamat Lengkap Penerima" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+
+          <input type="text" name="cargo_type" required placeholder="Jenis Barang (cth: Paket Skincare)" style="border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+
+          <div style="display:flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;background:#fff;">
+            <input type="number" step="0.1" min="0.1" name="weight_kg" id="ct-weight-input" value="1" required placeholder="Berat" style="width:100%;border:none;outline:none;font-size:12px;">
+            <strong style="font-size:12px;color:#0f172a;">Kg</strong>
+          </div>
+
+          <div style="grid-column:span 2;">
+            <label style="display:block;font-size:11px;color:#475569;margin-bottom:2px;">Harga / Biaya IDR (Otomatis per Kg &amp; Moda, bisa diubah)</label>
+            <input type="number" name="price" id="ct-price-input" required value="25000" style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:12px;">
+          </div>
+
+          <button type="submit" style="grid-column:span 2;margin-top:4px;background:#15803d;color:#fff;border:none;border-radius:6px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">Buat &amp; Cetak Resi Kiriman</button>
+          <div id="ct-full-add-msg" style="grid-column:span 2;font-size:12px;font-weight:600;"></div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const weightEl = modal.querySelector('#ct-weight-input');
+    const modeEl = modal.querySelector('#ct-mode-select');
+    const priceEl = modal.querySelector('#ct-price-input');
+
+    const recalc = () => {
+      const kg = Math.max(0.1, parseFloat(weightEl.value || '1') || 1);
+      const tarif = /pesawat|air/i.test(modeEl.value || '') ? 45000 : 25000;
+      priceEl.value = Math.round(kg * tarif);
+    };
+
+    weightEl.addEventListener('input', recalc);
+    modeEl.addEventListener('change', recalc);
+
+    modal.querySelector('#ct-close-full-add').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    modal.querySelector('#ct-full-add-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const d = Object.fromEntries(new FormData(ev.target).entries());
+      const msgEl = modal.querySelector('#ct-full-add-msg');
+      const kg = parseFloat(d.weight_kg || '1') || 1;
+      const isAir = /pesawat|air/i.test(d.transport_mode || '');
+
+      const payload = {
+        shipment_number: d.shipment_number,
+        transport_mode: d.transport_mode,
+        mode: isAir ? 'Air Freight' : 'Sea Freight',
+        cargo_type: `${d.cargo_type} (${kg} Kg)`,
+        weight_kg: kg,
+        sender_name: d.sender_name,
+        sender_phone: d.sender_phone,
+        origin_from: d.origin_from,
+        origin_address: d.origin_address,
+        receiver_name: d.receiver_name,
+        receiver_phone: d.receiver_phone,
+        destination_to: d.destination_to,
+        destination_address: d.destination_address,
+        route: `${d.origin_from} -> ${d.destination_to}`,
+        cost: Number(d.price || 0),
+        price: Number(d.price || 0)
+      };
+
+      // Coba masukkan ke array/fungsi peta jika tersedia di window
+      try {
+        const mapArr = window.mapShipments || window.routes || window.shipments;
+        if (Array.isArray(mapArr)) mapArr.unshift(payload);
+        ['renderMap', 'drawMap', 'updateMap', 'initMap', 'initDash'].forEach(fn => {
+          if (typeof window[fn] === 'function') window[fn]();
+        });
+      } catch (_) {}
+
+      // Tambah badge rute baru pada blok peta bila array global peta tidak dipakai
+      const mapSection = Array.from(document.querySelectorAll('div, section')).find(el =>
+        /jalur\s*laut|jalur\s*udara|sea\s*vessel|air\s*cargo/i.test(el.innerText || '') && el.querySelector('svg, canvas, img')
+      );
+      if (mapSection && !mapSection.dataset.ctAddedRoute) {
+        const badge = document.createElement('div');
+        badge.style.cssText = 'margin-top:6px;padding:6px 10px;border-radius:6px;background:#f0fdf4;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:700;';
+        badge.textContent = `Rute Aktif Baru (${payload.shipment_number}): ${d.origin_from} → ${d.destination_to} (${isAir ? 'Jalur Udara' : 'Jalur Laut'} • ${kg} Kg)`;
+        mapSection.appendChild(badge);
+        mapSection.dataset.ctAddedRoute = '1';
+      }
+
+      try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const res = await fetch('/api/shipments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          msgEl.style.color = '#059669';
+          msgEl.textContent = `Resi ${payload.shipment_number} tersimpan!`;
+          setTimeout(() => location.reload(), 700);
+          return;
+        }
+      } catch (_) {}
+
+      const tbody = document.querySelector('table tbody');
+      if (tbody) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:8px;">${payload.shipment_number}</td>
+          <td style="padding:8px;">
+            <div><strong>Dari:</strong> ${d.sender_name} (${d.sender_phone}) - ${d.origin_address}</div>
+            <div><strong>Ke:</strong> ${d.receiver_name} (${d.receiver_phone}) - ${d.destination_address}</div>
+          </td>
+          <td style="padding:8px;">${payload.cargo_type} <div style="font-size:11px;color:#475569;">${d.transport_mode}</div></td>
+          <td style="padding:8px;">${d.origin_from} &rarr; ${d.destination_to}</td>
+          <td style="padding:8px;">Rp ${Number(d.price || 0).toLocaleString('id-ID')}</td>
+          <td style="padding:8px;"><span style="padding:2px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:700;">BOOKED</span></td>
+        `;
+        tbody.prepend(tr);
+      }
+
+      msgEl.style.color = '#059669';
+      msgEl.textContent = `Resi ${payload.shipment_number} (${kg} Kg) tercatat & rute ditampilkan.`;
+      setTimeout(() => {
+        modal.style.display = 'none';
+        modal.querySelector('#ct-resi-input').value = genResi();
+      }, 600);
+    });
+  } else {
+    const resiEl = modal.querySelector('#ct-resi-input');
+    if (resiEl && !resiEl.value) resiEl.value = `CT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    modal.style.display = 'flex';
+  }
+}, true);
+</script>
 </body>
 </html>
