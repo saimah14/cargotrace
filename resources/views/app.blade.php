@@ -604,12 +604,6 @@
             </div>
             <p id="login-err" style="display:none;background:#ffe4e6;color:#9f1239;padding:8px;border-radius:6px;font-size:12px;margin-bottom:10px;text-align:center"></p>
             <div id="login-form">
-                <label style="font-size:11px;font-weight:bold;color:#475569">ROLE AKSES</label>
-                <select id="login-role" onchange="syncRoleEmail()" style="width:100%;padding:8px 10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
-                    <option value="Administrator">Administrator</option>
-                    <option value="Logistics Operator">Logistics Operator</option>
-                    <option value="Customer">Customer</option>
-                </select>
                 <label style="font-size:11px;font-weight:bold;color:#475569">EMAIL</label>
                 <input type="email" id="login-email" placeholder="Masukkan email" style="width:100%;padding:8px 10px;margin:4px 0 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
                 <label style="font-size:11px;font-weight:bold;color:#475569">PASSWORD</label>
@@ -1163,10 +1157,6 @@
             div.className=cls;div.setAttribute('data-owner',owner);div.style.cssText='padding:12px;border-radius:8px;font-size:13px';
             div.innerHTML=`<b>${title}:</b> ${msg}`;list.prepend(div);applyRoleVisibility();
         }
-        function syncRoleEmail(){
-            const r=document.getElementById('login-role').value,em=document.getElementById('login-email');
-            em.value=r==='Administrator'?'admin@cargotrace.com':(r==='Logistics Operator'?'operator@cargotrace.com':'customer@cargotrace.com');
-        }
         function showCreateAccount(){
             document.getElementById('login-form').style.display='none';
             document.getElementById('create-account-form').style.display='block';
@@ -1205,7 +1195,7 @@
             document.getElementById('logout-form').submit();
         }
         async function handleLogin(){
-            const r=document.getElementById('login-role').value,em=document.getElementById('login-email').value.trim(),pw=document.getElementById('login-pass').value,err=document.getElementById('login-err');
+            const em=document.getElementById('login-email').value.trim(),pw=document.getElementById('login-pass').value,err=document.getElementById('login-err');
             if(!em||!pw){err.innerText='Email dan password wajib diisi.';err.style.display='block';return;}
             try{
                 const response=await fetch(apiBaseUrl+'/login',{
@@ -1219,19 +1209,18 @@
                     completeLogin(role,data.token);
                     return;
                 }
-                if(response.status!==401){
+                if(response.status===401){
+                    err.innerText='Email atau password salah.';
+                }else{
                     const data=await response.json();
                     err.innerText=data.message||'Gagal masuk. Silakan coba lagi.';
-                    err.style.display='block';
-                    return;
                 }
+                err.style.display='block';
             }catch(error){
                 err.innerText='Tidak dapat terhubung ke server. Silakan coba lagi.';
                 err.style.display='block';
                 return;
             }
-            if(pw!=='password123'){err.innerText='Email atau password salah.';err.style.display='block';return;}
-            completeLogin(r);
         }
         async function handleRegister(){
             const name=document.getElementById('register-name').value.trim(),email=document.getElementById('register-email').value.trim(),password=document.getElementById('register-pass').value,confirmation=document.getElementById('register-pass-confirm').value,err=document.getElementById('login-err'),button=document.getElementById('register-submit');

@@ -7,10 +7,8 @@ use Illuminate\Http\Request;
 
 class StatsController extends Controller
 {
-    public function index(Request $request)
+    public function __call($method, $parameters)
     {
-        return response()->json([
-            'status' => 'ok',
-        ]);
+        return response()->json(['status' => 'ok']);
     }
-}
+}g

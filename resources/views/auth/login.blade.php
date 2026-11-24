@@ -64,14 +64,8 @@
         .account-link{margin:21px 0 0;text-align:center;color:#718396;font-size:12px}
         .account-link a{color:#087e96;font-weight:800;text-decoration:none}
         .account-link a:hover{text-decoration:underline}
-        .demo-box{margin-top:28px;padding:14px 15px;border:1px solid #e6edf2;border-radius:12px;background:#f8fbfc}
-        .demo-title{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#4f6578;font-size:10px;font-weight:800}
-        .demo-title svg{width:14px;height:14px;color:#0a91a8}
-        .demo-list{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;color:#73869a;font-size:10px}
-        .demo-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .demo-list b{color:#334b60}
         @media(max-width:760px){body{padding:18px}.login-shell{max-width:510px;min-height:0;grid-template-columns:1fr;border-radius:22px}.brand-panel{display:none}.form-panel{padding:38px 28px}.mobile-brand{display:flex;align-items:center;gap:10px;margin-bottom:34px}.mobile-brand .brand-mark{width:38px;height:38px}.form-heading h2{font-size:27px}}
-        @media(max-width:420px){body{padding:12px}.form-panel{padding:30px 22px}.demo-list{grid-template-columns:1fr}.form-options{font-size:10px}}
+        @media(max-width:420px){body{padding:12px}.form-panel{padding:30px 22px}.form-options{font-size:10px}}
         @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
     </style>
 </head>
@@ -171,18 +165,6 @@
                 </form>
 
                 <p class="account-link">Belum punya akun? <a href="{{ route('register') }}">Buat akun customer</a></p>
-
-                <aside class="demo-box" aria-label="Akun demo">
-                    <div class="demo-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
-                        Coba akun demo <span style="font-weight:500;color:#8192a2">(password: password123)</span>
-                    </div>
-                    <div class="demo-list">
-                        <span><b>Admin</b> &middot; admin@cargotrace.com</span>
-                        <span><b>Operator</b> &middot; operator@cargotrace.com</span>
-                        <span><b>Customer</b> &middot; customer@cargotrace.com</span>
-                    </div>
-                </aside>
             </div>
         </section>
     </main>

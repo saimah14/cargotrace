@@ -19,7 +19,12 @@ class AccountRegistrationTest extends TestCase
             ->assertUnauthorized();
         $this->get('/login')
             ->assertOk()
-            ->assertSee('Buat akun');
+            ->assertSee('Buat akun')
+            ->assertDontSee('Coba akun demo')
+            ->assertDontSee('admin@cargotrace.com')
+            ->assertDontSee('operator@cargotrace.com')
+            ->assertDontSee('customer@cargotrace.com')
+            ->assertDontSee('password123');
 
         $credentials = [
             'name' => 'CargoTrace Customer',
@@ -50,6 +55,10 @@ class AccountRegistrationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('user.role', 'customer')
             ->assertJsonStructure(['token']);
+        $this->assertDatabaseHas('users', [
+            'email' => 'api-customer@example.com',
+            'role' => 'customer',
+        ]);
 
         $this->post('/logout')->assertRedirect(route('login'));
         $this->assertGuest();
