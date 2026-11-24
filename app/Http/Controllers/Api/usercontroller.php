@@ -14,9 +14,29 @@ class UserController extends Controller
     // Daftar user (khusus admin, dijaga di routes/api.php).
     public function index(): JsonResponse
     {
-        return response()->json(
-            User::orderBy('id')->get(['id', 'name', 'email', 'role', 'created_at'])
-        );
+        $users = User::with([
+            'shipments:id,customer_id,shipment_number',
+            'shipments.exceptions:id,shipment_id,type,severity,status,detected_at',
+        ])->orderBy('id')->get(['id', 'name', 'email', 'role', 'created_at']);
+
+        $users->each(function (User $user) {
+            $exceptions = $user->shipments->flatMap(function ($shipment) {
+                return $shipment->exceptions->map(function ($exception) use ($shipment) {
+                    return [
+                        'shipment_number' => $shipment->shipment_number,
+                        'type' => $exception->type,
+                        'severity' => $exception->severity,
+                        'status' => $exception->status,
+                        'detected_at' => $exception->detected_at,
+                    ];
+                });
+            })->values();
+
+            $user->setAttribute('exceptions', $exceptions);
+            $user->makeHidden('shipments');
+        });
+
+        return response()->json($users);
     }
 
     // Ubah role user (khusus admin).

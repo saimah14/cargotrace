@@ -35,7 +35,15 @@ class User extends Authenticatable
 
     public function hasRole(string ...$roles): bool
     {
-        return in_array($this->role, $roles, true);
+        $normalize = static function (string $role): string {
+            return match (strtolower(trim($role))) {
+                'administrator' => self::ROLE_ADMIN,
+                'logistics operator' => self::ROLE_OPERATOR,
+                default => strtolower(trim($role)),
+            };
+        };
+
+        return in_array($normalize($this->role), array_map($normalize, $roles), true);
     }
 
     public function shipments(): HasMany

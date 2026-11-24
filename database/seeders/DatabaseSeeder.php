@@ -24,5 +24,8 @@ class DatabaseSeeder extends Seeder
             ['email' => 'customer@cargotrace.com'],
             ['name' => 'Customer BSN', 'password' => Hash::make('password123'), 'role' => 'Customer']
         );
+
+        $this->call(ShipmentCatalogSeeder::class);
+        $this->call(DemoShipmentSeeder::class);
     }
 }

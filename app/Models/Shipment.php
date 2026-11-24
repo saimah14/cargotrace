@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Shipment extends Model
 {
@@ -25,11 +26,20 @@ class Shipment extends Model
         'origin_id',
         'destination_id',
         'cargo_type',
+        'transport_mode',
+        'sender_name',
+        'sender_phone',
+        'origin_address',
+        'receiver_name',
+        'receiver_phone',
+        'destination_address',
+        'cost',
         'expected_departure',
         'expected_arrival',
     ];
 
     protected $casts = [
+        'cost' => 'decimal:2',
         'expected_departure' => 'datetime',
         'expected_arrival' => 'datetime',
         'estimated_arrival' => 'datetime',
@@ -64,6 +74,11 @@ class Shipment extends Model
     public function trackingEvents(): HasMany
     {
         return $this->hasMany(TrackingEvent::class)->orderBy('occurred_at');
+    }
+
+    public function latestTrackingEvent(): HasOne
+    {
+        return $this->hasOne(TrackingEvent::class)->latestOfMany('occurred_at');
     }
 
     public function exceptions(): HasMany

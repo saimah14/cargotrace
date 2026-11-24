@@ -1,90 +1,87 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\DashboardController;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\Api\DashboardController;
+use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\PersonalAccessToken;
 
-Route::view('/', 'app')->name('dashboard');
+Route::get('/', function (Request $request) {
+    $apiToken = $request->session()->get('api_token');
 
-Route::get('/dashboard-lama', [DashboardController::class, 'index'])->name('dashboard.lama');
-
-Route::get('/login', function () {
-    if (Auth::check()) {
-        return redirect('/');
+    if (! $apiToken) {
+        $apiToken = $request->user()->createToken('web-session')->plainTextToken;
+        $request->session()->put('api_token', $apiToken);
     }
 
-    $errorHtml = session('error') ? '<div style="color:#e11d48; background:#ffe4e6; padding:10px; border-radius:6px; font-size:12px; margin-bottom:15px; text-align:center; font-weight:bold;">'.session('error').'</div>' : '';
-    $csrf = csrf_token();
-
-    return response('
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>CargoTrace - Login</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="bg-slate-100 flex items-center justify-center h-screen font-sans">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-            <div class="text-center mb-6">
-                <h2 class="text-2xl font-black text-slate-800 tracking-tight">CargoTrace</h2>
-                <p class="text-xs text-slate-500 mt-1">Global Shipment Visibility Platform</p>
-            </div>
-            
-            '.$errorHtml.'
-
-            <form method="POST" action="'.url('/login').'">
-                <input type="hidden" name="_token" value="'.$csrf.'">
-                <div class="mb-4">
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Email Address</label>
-                    <input type="email" name="email" value="admin@cargotrace.com" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <div class="mb-6">
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-                    <input type="password" name="password" value="password123" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md">
-                    Sign In to Platform
-                </button>
-            </form>
-
-            <div class="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
-                <p class="font-semibold mb-1">Akun Demo (Password: password123):</p>
-                <p class="font-mono">admin@cargotrace.com</p>
-                <p class="font-mono">operator@cargotrace.com</p>
-                <p class="font-mono">customer@cargotrace.com</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    ');
-})->name('login');
-
-Route::post('/login', function (Request $request) {
-    $credentials = $request->validate([
-        'email' => ['required', 'email'],
-        'password' => ['required'],
+    return view('app', [
+        'authenticatedUser' => $request->user(),
+        'apiToken' => $apiToken,
     ]);
+})->middleware('auth')->name('dashboard');
 
-    if (Auth::attempt($credentials)) {
+Route::get('/dashboard-lama', [DashboardController::class, 'index'])
+    ->middleware('auth')
+    ->name('dashboard.lama');
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', function () {
+        return view('auth.login');
+    })->name('login');
+
+    Route::post('/login', function (Request $request) {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
+        ]);
+
+        if (! Auth::attempt($credentials)) {
+            return back()->withInput($request->only('email'))->with('error', 'Email atau password salah!');
+        }
+
         $request->session()->regenerate();
-        return redirect('/');
-    }
+        $request->session()->forget('api_token');
+        $apiToken = $request->user()->createToken('web-session')->plainTextToken;
+        $request->session()->put('api_token', $apiToken);
 
-    return back()->with('error', 'Email atau password salah!');
-})->name('login.post');
+        return redirect()->intended('/');
+    })->middleware('throttle:10,1')->name('login.post');
+
+    Route::get('/register', function () {
+        return view('auth.register');
+    })->name('register');
+
+    Route::post('/register', function (Request $request) {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'password' => ['required', 'confirmed', 'min:8'],
+        ]);
+        unset($data['password_confirmation']);
+
+        $user = new User($data);
+        $user->role = User::ROLE_CUSTOMER;
+        $user->save();
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $apiToken = $user->createToken('web-session')->plainTextToken;
+        $request->session()->put('api_token', $apiToken);
+
+        return redirect('/');
+    })->middleware('throttle:5,1')->name('register.post');
+});
 
 Route::post('/logout', function (Request $request) {
-    Auth::logout();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-    return redirect()->route('login');
-})->name('logout');
+    $token = $request->session()->pull('api_token');
+    if ($token) {
+        PersonalAccessToken::findToken($token)?->delete();
+    }
 
-Route::get('/logout', function (Request $request) {
     Auth::logout();
     $request->session()->invalidate();
     $request->session()->regenerateToken();
+
     return redirect()->route('login');
-});
+})->middleware('auth')->name('logout');

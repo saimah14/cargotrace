@@ -15,16 +15,28 @@ class ExternalController extends Controller
     // Ubah ke false HANYA di laptop jika muncul "cURL error 60" (masalah sertifikat XAMPP).
     private const VERIFY_SSL = true;
 
-    private const CURRENCIES = ['IDR', 'EUR', 'SGD', 'MYR', 'CNY'];
-
-    public function rates(): JsonResponse
+    public function rates(Request $request): JsonResponse
     {
-        return $this->cachedFetch('fx_rates', 3600, fn () => $this->fetchRates());
+        if ($request->boolean('refresh')) {
+            Cache::forget('fx_rates_v5');
+        }
+
+        return $this->cachedFetch('fx_rates_v5', 60, fn () => $this->fetchRates());
     }
 
     public function news(): JsonResponse
     {
         return $this->cachedFetch('shipping_news', 900, fn () => $this->fetchNews());
+    }
+
+    public function countries(): JsonResponse
+    {
+        return $this->cachedFetch('world_countries_v2', 604800, function () {
+            return [
+                'countries' => $this->fetchCountryNames(),
+                'source' => 'REST Countries',
+            ];
+        });
     }
 
     // Cuaca di lokasi shipment (Open-Meteo, tanpa API key). Hanya informasi, bukan prediksi delay.
@@ -112,28 +124,128 @@ class ExternalController extends Controller
     private function fetchRates(): array
     {
         $json = Http::withOptions(['verify' => self::VERIFY_SSL])
-            ->timeout(8)
+            ->timeout(10)
             ->retry(2, 300)
-            ->get('https://api.frankfurter.dev/v1/latest', [
-                'base' => 'USD',
-                'symbols' => implode(',', self::CURRENCIES),
-            ])
+            ->get('https://api.fxratesapi.com/latest', ['base' => 'IDR'])
             ->throw()
             ->json();
 
-        $rates = $json['rates'] ?? [];
+        $rates = $json['rates'] ?? null;
 
-        if (empty($rates['IDR']) || empty($rates['EUR'])) {
+        if (($json['success'] ?? false) !== true
+            || ($json['base'] ?? null) !== 'IDR'
+            || ! is_array($rates)
+            || empty($rates['IDR'])
+            || empty($rates['MYR'])
+            || empty($rates['JPY'])) {
             throw new \RuntimeException('Unexpected response from rates API.');
         }
 
+        $currencies = Cache::remember(
+            'currency_country_map_v2',
+            604800,
+            fn () => $this->fetchCurrencyCountryMap()
+        );
+        $rates = array_intersect_key($rates, $currencies);
+        $currencies = array_intersect_key($currencies, $rates);
+
         return [
-            'base' => $json['base'] ?? 'USD',
-            'date' => $json['date'] ?? null,
+            'base' => 'IDR',
+            'date' => isset($json['timestamp'])
+                ? gmdate('Y-m-d', (int) $json['timestamp'])
+                : null,
+            'updated_at' => $json['date'] ?? null,
             'rates' => $rates,
-            'idr_per_eur' => round($rates['IDR'] / $rates['EUR'], 2),
-            'source' => 'Frankfurter (European Central Bank)',
+            'currencies' => $currencies,
+            'source' => 'FXRatesAPI',
         ];
+    }
+
+    private function fetchCurrencyCountryMap(): array
+    {
+        $countries = Http::withOptions(['verify' => self::VERIFY_SSL])
+            ->withHeaders(['User-Agent' => 'CargoTrace/1.0'])
+            ->timeout(12)
+            ->retry(2, 300)
+            ->get('https://raw.githubusercontent.com/mledoze/countries/master/countries.json')
+            ->throw()
+            ->json();
+
+        if (! is_array($countries)) {
+            throw new \RuntimeException('Unexpected response from country metadata source.');
+        }
+
+        $currencies = [];
+
+        foreach ($countries as $country) {
+            $countryName = $country['name']['common'] ?? null;
+            if (! is_string($countryName) || $countryName === '') {
+                continue;
+            }
+
+            $localName = $country['translations']['ind']['common'] ?? null;
+
+            foreach (($country['currencies'] ?? []) as $code => $currency) {
+                if (! is_array($currency)) {
+                    continue;
+                }
+
+                $currencies[$code] ??= [
+                    'name' => $currency['name'] ?? $code,
+                    'symbol' => $currency['symbol'] ?? $code,
+                    'countries' => [],
+                    'aliases' => [],
+                ];
+                $currencies[$code]['countries'][$countryName] = $countryName;
+
+                if (is_string($localName) && $localName !== '' && $localName !== $countryName) {
+                    $currencies[$code]['aliases'][$localName] = $localName;
+                }
+            }
+        }
+
+        foreach ($currencies as &$currency) {
+            $currency['countries'] = array_values($currency['countries']);
+            $currency['aliases'] = array_values($currency['aliases']);
+        }
+        unset($currency);
+
+        return $currencies;
+    }
+
+    private function fetchCountryNames(): array
+    {
+        $countries = Http::withOptions(['verify' => self::VERIFY_SSL])
+            ->withHeaders(['User-Agent' => 'CargoTrace/1.0'])
+            ->timeout(12)
+            ->retry(2, 300)
+            ->get('https://raw.githubusercontent.com/mledoze/countries/master/countries.json')
+            ->throw()
+            ->json();
+
+        if (! is_array($countries)) {
+            throw new \RuntimeException('Unexpected response from country metadata source.');
+        }
+
+        $names = [];
+
+        foreach ($countries as $country) {
+            $commonName = $country['name']['common'] ?? null;
+            if (! is_string($commonName) || $commonName === '') {
+                continue;
+            }
+
+            $names[$commonName] = $commonName;
+            $localName = $country['translations']['ind']['common'] ?? null;
+            if (is_string($localName) && $localName !== '') {
+                $names[$localName] = $localName;
+            }
+        }
+
+        $names = array_values($names);
+        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $names;
     }
 
     private function fetchNews(): array

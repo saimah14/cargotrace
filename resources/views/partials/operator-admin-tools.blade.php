@@ -1,146 +1,185 @@
-@if(auth()->check() && (auth()->user()->isOperator() || auth()->user()->isAdmin()))
+@if(auth()->check() && auth()->user()->hasRole('operator', 'admin'))
 @php
-    $opShipments = \App\Models\Shipment::with(['originLocation', 'destinationLocation'])
+    $opShipments = \App\Models\Shipment::with(['origin', 'destination'])
         ->orderByDesc('id')
         ->limit(30)
         ->get();
+    $opCustomers = \App\Models\User::whereIn('role', ['customer', 'Customer'])->orderBy('name')->get(['id', 'name', 'email']);
+    $opCarriers = \App\Models\Carrier::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+    $opLocations = \App\Models\Location::orderBy('name')->get(['id', 'name', 'country']);
 @endphp
 
-<div id="ct-operator-suite" style="max-width:1280px;margin:20px auto 36px;padding:16px;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;">
-    <div style="margin-bottom:14px;">
-        <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#0f172a;">Logistics Operator — Operasional Shipment</h3>
-        <p style="margin:0;font-size:12px;color:#475569;">Shipment operasional, buat shipment, perbarui shipment, dan tambah tracking event.</p>
-    </div>
-    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:16px;">
-        <strong style="display:block;font-size:13px;color:#0f172a;margin-bottom:8px;">Shipment Operasional</strong>
-        <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:12px;text-align:left;">
-                <thead>
-                    <tr style="border-bottom:1px solid #cbd5e1;">
-                        <th style="padding:6px;">ID</th>
-                        <th style="padding:6px;">No Resi</th>
-                        <th style="padding:6px;">Kargo</th>
-                        <th style="padding:6px;">Rute</th>
-                        <th style="padding:6px;">Status</th>
-                        <th style="padding:6px;">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($opShipments as $ship)
-                    <tr style="border-bottom:1px solid #f1f5f9;">
-                        <td style="padding:6px;">#{{ $ship->id }}</td>
-                        <td style="padding:6px;font-weight:700;">{{ $ship->shipment_number }}</td>
-                        <td style="padding:6px;">{{ $ship->cargo_type }}</td>
-                        <td style="padding:6px;">{{ $ship->originLocation->code ?? '-' }} &rarr; {{ $ship->destinationLocation->code ?? '-' }}</td>
-                        <td style="padding:6px;font-weight:600;">{{ $ship->current_status }}</td>
-                        <td style="padding:6px;">
-                            <button type="button" onclick="ctSelectShipment({{ $ship->id }})" style="padding:3px 8px;border:none;border-radius:4px;background:#0f172a;color:#fff;cursor:pointer;">Pilih</button>
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
-        <form id="ct-form-create" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
-            @csrf
-            <strong style="font-size:13px;color:#0f172a;">Buat Shipment</strong>
-            <input type="text" name="shipment_number" required placeholder="Shipment Number (CT-2026-101)" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" name="customer_id" required value="3" placeholder="Customer ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" name="carrier_id" required value="1" placeholder="Carrier ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" name="origin_location_id" required value="1" placeholder="Origin Location ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" name="destination_location_id" required value="2" placeholder="Destination Location ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="text" name="cargo_type" required placeholder="Cargo Type" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" step="0.01" name="weight_kg" value="10" placeholder="Weight (kg)" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="number" step="0.001" name="volume_m3" value="0.2" placeholder="Volume (m3)" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <button type="submit" style="background:#0f172a;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">Simpan Shipment</button>
-            <div id="ct-msg-create" style="font-size:12px;"></div>
-        </form>
-
-        <form id="ct-form-update" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
-            @csrf
-            <strong style="font-size:13px;color:#0f172a;">Perbarui Shipment</strong>
-            <input type="number" id="ct-id-update" name="shipment_id" required placeholder="Shipment ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <select name="status" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-                <option value="BOOKED">BOOKED</option>
-                <option value="PICKED_UP">PICKED_UP</option>
-                <option value="IN_TRANSIT">IN_TRANSIT</option>
-                <option value="DELIVERED">DELIVERED</option>
-            </select>
-            <input type="datetime-local" name="estimated_arrival_at" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="text" name="delay_reason" placeholder="Catatan / Alasan Delay" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <button type="submit" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">Perbarui Shipment</button>
-            <div id="ct-msg-update" style="font-size:12px;"></div>
-        </form>
-        <form id="ct-form-tracking" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
-            @csrf
-            <strong style="font-size:13px;color:#0f172a;">Tambah Tracking Event</strong>
-            <input type="number" id="ct-id-tracking" name="shipment_id" required placeholder="Shipment ID" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <select name="event_type" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-                <option value="BOOKED">BOOKED</option>
-                <option value="PICKED_UP">PICKED_UP</option>
-                <option value="IN_TRANSIT" selected>IN_TRANSIT</option>
-                <option value="DELIVERED">DELIVERED</option>
-                <option value="EXCEPTION">EXCEPTION</option>
-            </select>
-            <input type="text" name="location_name" placeholder="Lokasi Kejadian" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="datetime-local" name="occurred_at" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <input type="text" name="description" placeholder="Deskripsi Event" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
-            <button type="submit" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">Tambah Tracking Event</button>
-            <div id="ct-msg-tracking" style="font-size:12px;"></div>
-        </form>
-    </div>
+<div id="ct-shipment-select-options" hidden>
+    <select name="customer_id">
+        <option value="">Pilih customer</option>
+        @foreach($opCustomers as $customer)<option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->email }})</option>@endforeach
+    </select>
+    <select name="carrier_id">
+        <option value="">Pilih carrier</option>
+        @foreach($opCarriers as $carrier)<option value="{{ $carrier->id }}">{{ $carrier->name }}</option>@endforeach
+    </select>
 </div>
+<datalist id="ct-country-options"></datalist>
+
+<details id="ct-operator-suite" style="max-width:1280px;margin:20px auto 36px;padding:16px;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;">
+    <summary style="cursor:pointer;color:#0f172a;">
+        <strong style="font-size:16px;">Fitur tambahan</strong>
+        <span style="display:block;margin-top:4px;font-size:12px;color:#475569;">Pengaturan lanjutan untuk admin/operator. Tidak perlu dibuka untuk kirim barang biasa.</span>
+    </summary>
+    <div style="margin-top:14px;">
+    <div style="display:grid;grid-template-columns:minmax(280px,1fr);gap:14px;">
+        <details id="ct-advanced-settings" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#334155;">Edit detail dan tambah tracking manual</summary>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:12px;">
+        <form id="ct-form-update" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <strong style="font-size:13px;color:#0f172a;">Perbarui Detail Shipment</strong>
+            <select id="ct-id-update" name="shipment_id" required onchange="loadShipmentIntoEdit(this.value)" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                <option value="">Pilih shipment</option>
+                @foreach($opShipments as $ship)<option value="{{ $ship->id }}">{{ $ship->shipment_number }}</option>@endforeach
+            </select>
+            <select name="carrier_id" required style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                @foreach($opCarriers as $carrier)<option value="{{ $carrier->id }}">{{ $carrier->name }}</option>@endforeach
+            </select>
+            <select name="origin_id" required style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                @foreach($opLocations as $location)<option value="{{ $location->id }}">{{ $location->name }}, {{ $location->country }}</option>@endforeach
+            </select>
+            <select name="destination_id" required style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                @foreach($opLocations as $location)<option value="{{ $location->id }}">{{ $location->name }}, {{ $location->country }}</option>@endforeach
+            </select>
+            <input type="text" name="cargo_type" maxlength="60" required placeholder="Jenis kargo" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <input type="datetime-local" name="expected_departure" aria-label="Jadwal keberangkatan baru" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <input type="datetime-local" name="expected_arrival" aria-label="Estimasi tiba baru" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <button type="submit" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">Perbarui Shipment</button>
+            <div id="ct-msg-update" role="status" style="font-size:12px;"></div>
+        </form>
+
+        <form id="ct-form-tracking" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <strong style="font-size:13px;color:#0f172a;">Tambah Tracking Event</strong>
+            <select id="ct-id-tracking" name="shipment_id" required style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                <option value="">Pilih shipment</option>
+                @foreach($opShipments as $ship)<option value="{{ $ship->id }}">{{ $ship->shipment_number }}</option>@endforeach
+            </select>
+            <input type="text" name="event_type" maxlength="30" required placeholder="Jenis event (contoh: DEPARTED)" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <select name="location_id" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+                <option value="">Pilih lokasi (opsional)</option>
+                @foreach($opLocations as $location)<option value="{{ $location->id }}">{{ $location->name }}, {{ $location->country }}</option>@endforeach
+            </select>
+            <input type="datetime-local" name="occurred_at" required aria-label="Waktu event" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <input type="text" name="description" maxlength="255" placeholder="Deskripsi event" style="border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;">
+            <button type="submit" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">Tambah Tracking Event</button>
+            <div id="ct-msg-tracking" role="status" style="font-size:12px;"></div>
+        </form>
+            </div>
+        </details>
+    </div>
+    </div>
+</details>
 <script>
-function ctSelectShipment(id) {
-    const u = document.getElementById('ct-id-update');
-    const t = document.getElementById('ct-id-tracking');
-    if (u) u.value = id;
-    if (t) t.value = id;
-}
+const shipmentsApiUrl = @json(rtrim(request()->getBaseUrl(), '/') . '/api/shipments');
 
-document.addEventListener('DOMContentLoaded', () => {
-    const hdr = {
-        'Content-Type': 'application/json',
+document.addEventListener('DOMContentLoaded', function () {
+    const token = @json($apiToken);
+    const headers = {
         'Accept': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
     };
-    const showMsg = (id, ok, txt) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = txt;
-        el.style.color = ok ? '#059669' : '#dc2626';
-        el.style.fontWeight = '600';
+    const showMessage = function (id, ok, text) {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.textContent = text;
+        element.style.color = ok ? '#059669' : '#dc2626';
+        element.style.fontWeight = '600';
+    };
+    const errorMessage = function (data, fallback) {
+        const errors = data && data.errors ? Object.values(data.errors).flat() : [];
+        return errors[0] || (data && data.message) || fallback;
+    };
+    const submit = async function (url, method, body, messageId, successMessage) {
+        try {
+            const response = await fetch(url, { method: method, headers: headers, body: JSON.stringify(body) });
+            const result = await response.json();
+            if (!response.ok) throw new Error(errorMessage(result, 'Permintaan gagal.'));
+            showMessage(messageId, true, successMessage);
+            if (typeof loadShipmentsFromApi === 'function') await loadShipmentsFromApi();
+            if (typeof loadTrackingTimeline === 'function') await loadTrackingTimeline();
+            if (typeof loadDashboardStats === 'function') await loadDashboardStats();
+            if (typeof loadAuditLogs === 'function' && document.getElementById('tab-audit-logs').classList.contains('active')) await loadAuditLogs();
+            return result;
+        } catch (error) {
+            showMessage(messageId, false, error.message || 'Permintaan gagal.');
+            return null;
+        }
     };
 
-    document.getElementById('ct-form-create')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const res = await fetch('/api/shipments', { method: 'POST', headers: hdr, body: JSON.stringify(Object.fromEntries(new FormData(e.target).entries())) });
-        const d = await res.json();
-        showMsg('ct-msg-create', res.ok, res.ok ? `Shipment tersimpan (#${d.data?.id ?? ''})` : (d.message || 'Gagal menyimpan'));
+    window.loadShipmentIntoEdit = async function (id) {
+        const message = document.getElementById('ct-msg-update');
+        if (!id) return;
+        try {
+            const response = await fetch(shipmentsApiUrl + '/' + id, { headers: headers });
+            const shipment = await response.json();
+            if (!response.ok) throw new Error(shipment.message || 'Detail kiriman tidak dapat dimuat.');
+            const form = document.getElementById('ct-form-update');
+            form.elements.carrier_id.value = shipment.carrier_id;
+            form.elements.origin_id.value = shipment.origin_id;
+            form.elements.destination_id.value = shipment.destination_id;
+            form.elements.cargo_type.value = shipment.cargo_type;
+            const toLocalDateTime = function (value) {
+                const date = new Date(value);
+                return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            };
+            form.elements.expected_departure.value = toLocalDateTime(shipment.expected_departure);
+            form.elements.expected_arrival.value = toLocalDateTime(shipment.expected_arrival);
+        } catch (error) {
+            showMessage('ct-msg-update', false, error.message || 'Detail kiriman tidak dapat dimuat.');
+        }
+    };
+
+    fetch(apiBaseUrl + '/countries', { headers: headers })
+        .then(async function (response) {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Daftar negara tidak dapat dimuat.');
+            const countries = Array.isArray(result.countries) ? result.countries : [];
+            const options = document.getElementById('ct-country-options');
+            countries.forEach(function (country) {
+                const option = document.createElement('option');
+                option.value = country;
+                options.appendChild(option);
+            });
+            const countryStatus = document.getElementById('ct-modal-country-status');
+            if (countryStatus) {
+                countryStatus.textContent = countries.length
+                    ? countries.length + ' negara tersedia. Kota bisa diketik manual.'
+                    : 'Daftar negara kosong; nama negara tetap bisa diketik manual.';
+            }
+        })
+        .catch(function (error) {
+            const countryStatus = document.getElementById('ct-modal-country-status');
+            if (countryStatus) countryStatus.textContent = 'Daftar negara tidak dapat dimuat; nama negara tetap bisa diketik manual.';
+            console.warn(error);
+        });
+
+    document.querySelectorAll('#ct-form-tracking input[name="occurred_at"]').forEach(function (input) {
+        const date = new Date();
+        input.value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     });
 
-    document.getElementById('ct-form-update')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const id = fd.get('shipment_id');
-        const body = Object.fromEntries(fd.entries());
-        delete body.shipment_id;
-        const res = await fetch(`/api/shipments/${id}`, { method: 'PATCH', headers: hdr, body: JSON.stringify(body) });
-        const d = await res.json();
-        showMsg('ct-msg-update', res.ok, res.ok ? `Shipment #${id} diperbarui` : (d.message || 'Gagal memperbarui'));
+    document.getElementById('ct-form-update').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+        const id = form.shipment_id;
+        delete form.shipment_id;
+        Object.keys(form).forEach(function (key) { if (form[key] === '') delete form[key]; });
+        await submit(shipmentsApiUrl + '/' + id, 'PATCH', form, 'ct-msg-update', 'Detail shipment berhasil diperbarui.');
     });
 
-    document.getElementById('ct-form-tracking')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const id = fd.get('shipment_id');
-        const body = Object.fromEntries(fd.entries());
-        delete body.shipment_id;
-        const res = await fetch(`/api/shipments/${id}/tracking`, { method: 'POST', headers: hdr, body: JSON.stringify(body) });
-        const d = await res.json();
-        showMsg('ct-msg-tracking', res.ok, res.ok ? `Tracking event tersimpan (#${id})` : (d.message || 'Gagal menambah event'));
+    document.getElementById('ct-form-tracking').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+        const id = form.shipment_id;
+        delete form.shipment_id;
+        if (form.location_id === '') delete form.location_id;
+        await submit(shipmentsApiUrl + '/' + id + '/tracking', 'POST', form, 'ct-msg-tracking', 'Tracking event berhasil ditambahkan.');
     });
 });
 </script>

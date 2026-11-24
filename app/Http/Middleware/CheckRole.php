@@ -12,7 +12,7 @@ class CheckRole
     {
         $user = $request->user();
 
-        if (! $user || ! in_array($user->role, $roles, true)) {
+        if (! $user || ! $user->hasRole(...$roles)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 

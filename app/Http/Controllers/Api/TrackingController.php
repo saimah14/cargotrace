@@ -25,11 +25,29 @@ class TrackingController extends Controller
         Shipment::DELIVERED => [],
     ];
 
+    public function list(Request $request): JsonResponse
+    {
+        $query = TrackingEvent::with([
+            'shipment:id,shipment_number,customer_id',
+            'location:id,name,country',
+        ])->latest('occurred_at');
+
+        if ($request->user()->hasRole(User::ROLE_CUSTOMER)) {
+            $query->whereHas('shipment', function ($shipmentQuery) use ($request) {
+                $shipmentQuery->where('customer_id', $request->user()->id);
+            });
+        }
+
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 100);
+
+        return response()->json($query->paginate($perPage));
+    }
+
     public function index(Request $request, Shipment $shipment): JsonResponse
     {
         $user = $request->user();
 
-        if ($user->role === User::ROLE_CUSTOMER && $shipment->customer_id !== $user->id) {
+        if ($user->hasRole(User::ROLE_CUSTOMER) && $shipment->customer_id !== $user->id) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 

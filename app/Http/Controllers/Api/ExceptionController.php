@@ -29,11 +29,25 @@ class ExceptionController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role === User::ROLE_CUSTOMER && $shipment->customer_id !== $user->id) {
+        if ($user->hasRole(User::ROLE_CUSTOMER) && $shipment->customer_id !== $user->id) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
         return response()->json($shipment->exceptions()->latest('detected_at')->get());
+    }
+
+    public function list(Request $request): JsonResponse
+    {
+        $query = ShipmentException::with('shipment:id,shipment_number,customer_id')
+            ->latest('detected_at');
+
+        if ($request->user()->hasRole(User::ROLE_CUSTOMER)) {
+            $query->whereHas('shipment', function ($shipmentQuery) use ($request) {
+                $shipmentQuery->where('customer_id', $request->user()->id);
+            });
+        }
+
+        return response()->json($query->paginate(15));
     }
 
     public function store(Request $request, Shipment $shipment): JsonResponse
@@ -126,6 +140,17 @@ class ExceptionController extends Controller
             }
 
             $exception->save();
+
+            if ($to === 'RESOLVED') {
+                $shipment = $exception->shipment()->first();
+                $openExceptions = $shipment
+                    ? $shipment->exceptions()->where('status', '!=', 'RESOLVED')->exists()
+                    : false;
+
+                if (! $openExceptions) {
+                    $exception->shipment()->update(['is_delayed' => false]);
+                }
+            }
 
             AuditLog::create([
                 'user_id' => $request->user()->id,

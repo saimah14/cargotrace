@@ -10,116 +10,202 @@ use App\Models\TrackingEvent;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DemoShipmentSeeder extends Seeder
 {
     public function run(): void
     {
         if (Shipment::exists()) {
-            return; // jangan menggandakan data demo
+            return;
         }
 
-        $customer = User::where('email', 'customer@cargotrace.test')->firstOrFail();
-        $operator = User::where('email', 'operator@cargotrace.test')->firstOrFail();
+        $customer = User::where('email', 'customer@cargotrace.com')->firstOrFail();
+        $operator = User::where('email', 'operator@cargotrace.com')->firstOrFail();
+        $corporate = User::updateOrCreate(
+            ['email' => 'corporate@cargotrace.com'],
+            [
+                'name' => 'PT Astra Mesin',
+                'password' => Hash::make('password123'),
+                'role' => 'Customer',
+            ]
+        );
 
         $carrier = fn (string $code) => Carrier::where('code', $code)->firstOrFail();
-        $loc = fn (string $name) => Location::where('name', $name)->firstOrFail();
+        $location = fn (string $name) => Location::where('name', $name)->firstOrFail();
 
-        $make = function (string $number, string $carrierCode, string $from, string $to, string $status, int $departDays, int $etaDays, string $cargo, array $items) use ($customer, $carrier, $loc) {
+        $makeShipment = function (
+            string $number,
+            User $owner,
+            string $carrierCode,
+            string $origin,
+            string $destination,
+            string $status,
+            int $departureDays,
+            int $arrivalDays,
+            string $cargoType,
+            array $items,
+            array $details
+        ) use ($carrier, $location) {
             $shipment = Shipment::create([
                 'shipment_number' => $number,
-                'customer_id' => $customer->id,
+                'customer_id' => $owner->id,
                 'carrier_id' => $carrier($carrierCode)->id,
-                'origin_id' => $loc($from)->id,
-                'destination_id' => $loc($to)->id,
-                'cargo_type' => $cargo,
-                'expected_departure' => now()->addDays($departDays),
-                'expected_arrival' => now()->addDays($etaDays),
+                'origin_id' => $location($origin)->id,
+                'destination_id' => $location($destination)->id,
+                'cargo_type' => $cargoType,
+                'transport_mode' => $details['transport_mode'],
+                'sender_name' => $details['sender_name'],
+                'sender_phone' => $details['sender_phone'] ?? null,
+                'origin_address' => $details['origin_address'] ?? null,
+                'receiver_name' => $details['receiver_name'],
+                'receiver_phone' => $details['receiver_phone'] ?? null,
+                'destination_address' => $details['destination_address'],
+                'cost' => $details['cost'],
+                'expected_departure' => now()->addDays($departureDays),
+                'expected_arrival' => now()->addDays($arrivalDays),
             ]);
-
             $shipment->items()->createMany($items);
             $shipment->forceFill(['status' => $status])->save();
 
             return $shipment;
         };
 
-        $event = function (Shipment $s, string $type, ?string $place, int $daysAgo, string $description, bool $isException = false) use ($loc, $operator) {
-            $location = $place ? $loc($place) : null;
+        $addEvent = function (
+            Shipment $shipment,
+            string $type,
+            string $place,
+            int $hoursAgo,
+            string $description,
+            bool $isException = false
+        ) use ($location, $operator) {
+            $placeLocation = $location($place);
 
             return TrackingEvent::create([
-                'shipment_id' => $s->id,
-                'location_id' => $location?->id,
+                'shipment_id' => $shipment->id,
+                'location_id' => $placeLocation->id,
                 'created_by' => $operator->id,
                 'event_type' => $type,
-                'occurred_at' => now()->subDays($daysAgo),
-                'latitude' => $location?->latitude,
-                'longitude' => $location?->longitude,
+                'occurred_at' => now()->subHours($hoursAgo),
+                'latitude' => $placeLocation->latitude,
+                'longitude' => $placeLocation->longitude,
                 'description' => $description,
                 'is_exception' => $isException,
             ]);
         };
 
-        $jkt = 'Tanjung Priok, Jakarta';
-        $sin = 'Singapore Port';
-        $klg = 'Port Klang';
-        $cmb = 'Colombo Port';
-        $rtm = 'Port of Rotterdam';
-        $ham = 'Port of Hamburg';
+        $customerShipment = $makeShipment(
+            'CT-2026-003',
+            $customer,
+            'GCR',
+            'Medan',
+            'Tanjung Priok',
+            'IN_TRANSIT',
+            -2,
+            2,
+            'Paket Skincare',
+            [['description' => 'Paket Skincare', 'quantity' => 1, 'weight_kg' => 4, 'volume_cbm' => 0.02]],
+            [
+                'transport_mode' => 'AIR',
+                'sender_name' => 'Saimah Store',
+                'sender_phone' => '0812-6411-90',
+                'receiver_name' => 'Nadia Putri',
+                'receiver_phone' => '0813-7700-21',
+                'destination_address' => 'Jl. Sudirman Kav. 21, Jakarta Selatan',
+                'cost' => 300000,
+            ]
+        );
+        $addEvent($customerShipment, 'BOOKED', 'Medan', 48, 'Paket telah dibooking.');
+        $addEvent($customerShipment, 'PICKED_UP', 'Medan', 24, 'Paket telah dijemput dari pengirim.');
+        $addEvent($customerShipment, 'IN_TRANSIT', 'Medan', 2, 'Paket berangkat dari Medan menuju Jakarta.');
+        $addEvent($customerShipment, 'PORT_CONGESTION', 'Tanjung Priok', 1, 'Pelabuhan tujuan mengalami kepadatan dan estimasi tiba bergeser.', true);
 
-        // 1. Dalam perjalanan, sesuai jadwal
-        $s1 = $make('CT-DEMO-0001', 'NOL', $jkt, $rtm, 'IN_TRANSIT', -12, 10, 'Electronics', [
-            ['description' => 'Laptops', 'quantity' => 100, 'weight_kg' => 250.5, 'volume_cbm' => 3.2],
-            ['description' => 'Monitors', 'quantity' => 60, 'weight_kg' => 420, 'volume_cbm' => 5.5],
-        ]);
-        $event($s1, 'BOOKED', $jkt, 12, 'Booking confirmed');
-        $event($s1, 'PICKED_UP', $jkt, 10, 'Cargo picked up at origin port');
-        $event($s1, 'IN_TRANSIT', $sin, 8, 'Departed Singapore');
-        $event($s1, 'ARRIVED_TRANSSHIPMENT', $cmb, 3, 'Arrived at transshipment port');
+        ShipmentException::firstOrCreate(
+            [
+                'shipment_id' => $customerShipment->id,
+                'type' => 'PORT_CONGESTION',
+            ],
+            [
+                'severity' => 'MEDIUM',
+                'status' => 'INVESTIGATING',
+                'notes' => 'Kepadatan pelabuhan memperlambat proses bongkar muat.',
+                'detected_at' => now()->subHour(),
+            ]
+        );
 
-        // 2. Delayed karena customs hold
-        $s2 = $make('CT-DEMO-0002', 'SFC', $sin, $ham, 'IN_TRANSIT', -15, 5, 'Textiles', [
-            ['description' => 'Garment cartons', 'quantity' => 400, 'weight_kg' => 1800, 'volume_cbm' => 22],
-        ]);
-        $event($s2, 'BOOKED', $sin, 15, 'Booking confirmed');
-        $event($s2, 'PICKED_UP', $sin, 13, 'Cargo picked up');
-        $event($s2, 'IN_TRANSIT', $klg, 11, 'Departed Port Klang');
-        $event($s2, 'CUSTOMS_HOLD', $cmb, 2, 'Held at customs for document inspection', true);
-        ShipmentException::create([
-            'shipment_id' => $s2->id,
-            'type' => 'CUSTOMS_HOLD',
-            'severity' => 'HIGH',
-            'status' => 'OPEN',
-            'notes' => 'Held at customs for document inspection',
-            'detected_at' => now()->subDays(2),
-        ]);
-        $s2->forceFill([
-            'estimated_arrival' => $s2->expected_arrival->copy()->addHours(30),
+        $seaShipment = $makeShipment(
+            'CT-2026-001',
+            $corporate,
+            'NOL',
+            'Tanjung Priok',
+            'Rotterdam',
+            'IN_TRANSIT',
+            -12,
+            5,
+            'Komponen Mesin',
+            [['description' => 'Komponen Mesin', 'quantity' => 1, 'weight_kg' => 450, 'volume_cbm' => 8]],
+            [
+                'transport_mode' => 'SEA',
+                'sender_name' => 'PT Astra Mesin',
+                'sender_phone' => '021-88912',
+                'receiver_name' => 'EuroTech BV',
+                'receiver_phone' => '+31-10442',
+                'destination_address' => 'Havenstraat 45, Rotterdam, NL',
+                'cost' => 11250000,
+            ]
+        );
+        $seaShipment->forceFill([
+            'estimated_arrival' => now()->addHours(24),
             'is_delayed' => true,
         ])->save();
+        $addEvent($seaShipment, 'BOOKED', 'Tanjung Priok', 288, 'Booking kapal dikonfirmasi.');
+        $addEvent($seaShipment, 'PICKED_UP', 'Tanjung Priok', 240, 'Kargo dimuat ke kapal.');
+        $addEvent($seaShipment, 'IN_TRANSIT', 'Singapore', 72, 'Kapal transit melewati Singapura.');
+        $addEvent($seaShipment, 'WEATHER_DELAY', 'Singapore', 1, 'Cuaca buruk dan gelombang tinggi menunda jadwal tiba.', true);
+
+        ShipmentException::create([
+            'shipment_id' => $seaShipment->id,
+            'type' => 'WEATHER_DELAY',
+            'severity' => 'HIGH',
+            'status' => 'OPEN',
+            'notes' => 'Cuaca badai dan gelombang tinggi di North Sea.',
+            'detected_at' => now()->subHour(),
+        ]);
+
+        $airShipment = $makeShipment(
+            'CT-2026-002',
+            $corporate,
+            'GCR',
+            'Tanjung Priok',
+            'Tokyo',
+            'IN_TRANSIT',
+            -3,
+            1,
+            'Semiconductor',
+            [['description' => 'Semiconductor', 'quantity' => 10, 'weight_kg' => 120, 'volume_cbm' => 1.2]],
+            [
+                'transport_mode' => 'AIR',
+                'sender_name' => 'CV Nusantara Chip',
+                'sender_phone' => '021-55210',
+                'receiver_name' => 'Tokyo Micro Corp',
+                'receiver_phone' => '+81-3551',
+                'destination_address' => 'Minato-ku 2-14, Tokyo, JP',
+                'cost' => 9000000,
+            ]
+        );
+        $addEvent($airShipment, 'BOOKED', 'Tanjung Priok', 72, 'Booking penerbangan dikonfirmasi.');
+        $addEvent($airShipment, 'PICKED_UP', 'Tanjung Priok', 48, 'Semiconductor telah dimuat.');
+        $addEvent($airShipment, 'IN_TRANSIT', 'Singapore', 6, 'Pesawat kargo dalam perjalanan menuju Tokyo.');
+
         UserNotification::create([
             'user_id' => $customer->id,
-            'shipment_id' => $s2->id,
-            'message' => "Shipment {$s2->shipment_number} is delayed. New ETA: {$s2->estimated_arrival->toDateTimeString()}.",
+            'shipment_id' => $customerShipment->id,
+            'message' => "Paket Anda {$customerShipment->shipment_number} sedang dalam perjalanan menuju Jakarta.",
         ]);
-
-        // 3. Sudah diterima
-        $s3 = $make('CT-DEMO-0003', 'ECL', $klg, $rtm, 'DELIVERED', -40, -5, 'Machinery parts', [
-            ['description' => 'Spare parts crates', 'quantity' => 20, 'weight_kg' => 900, 'volume_cbm' => 12],
+        UserNotification::create([
+            'user_id' => $corporate->id,
+            'shipment_id' => $seaShipment->id,
+            'message' => "Shipment {$seaShipment->shipment_number} mengalami keterlambatan akibat cuaca buruk.",
         ]);
-        $event($s3, 'BOOKED', $klg, 40, 'Booking confirmed');
-        $event($s3, 'PICKED_UP', $klg, 38, 'Cargo picked up');
-        $event($s3, 'IN_TRANSIT', $cmb, 30, 'Departed Colombo');
-        $event($s3, 'DELIVERED', $rtm, 5, 'Delivered to consignee');
-
-        // 4. Baru dibuat
-        $make('CT-DEMO-0004', 'NOL', $jkt, $ham, 'CREATED', 5, 30, 'Furniture', [
-            ['description' => 'Teak furniture sets', 'quantity' => 50, 'weight_kg' => 1500, 'volume_cbm' => 30],
-        ]);
-
-        // 5. Sudah dibooking
-        $s5 = $make('CT-DEMO-0005', 'SFC', $cmb, $rtm, 'BOOKED', 2, 25, 'Tea', [
-            ['description' => 'Tea chests', 'quantity' => 300, 'weight_kg' => 6000, 'volume_cbm' => 40],
-        ]);
-        $event($s5, 'BOOKED', $cmb, 1, 'Booking confirmed');
     }
 }

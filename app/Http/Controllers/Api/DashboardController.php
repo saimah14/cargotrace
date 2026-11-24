@@ -53,16 +53,22 @@ class DashboardController extends Controller
             ],
         ];
 
-        // Filter Otorisasi Peran Sesuai PPT
+        $allExceptions = [
+            ['id' => 101, 'shipment' => 'CT-DEMO-0002', 'type' => 'CUSTOMS_HOLD', 'severity' => 'HIGH', 'status' => 'OPEN', 'reported' => '2026-11-07 14:29:13', 'description' => 'Container flagged for physical inspection at port verification unit.'],
+            ['id' => 102, 'shipment' => 'CT-DEMO-0003', 'type' => 'WEATHER_DELAY', 'severity' => 'MEDIUM', 'status' => 'INVESTIGATING', 'reported' => '2026-11-08 09:15:00', 'description' => 'Severe typhoons causing 18-hour vessel re-routing.'],
+            ['id' => 103, 'shipment' => 'CT-DEMO-0001', 'type' => 'PORT_CONGESTION', 'severity' => 'LOW', 'status' => 'RESOLVED', 'reported' => '2026-11-05 11:00:00', 'description' => 'Berth delay resolved; vessel anchored successfully.']
+        ];
+
         if ($userRole === 'CUSTOMER') {
-            $shipments = array_values(array_filter($allShipments, fn($s) =>$s['owner'] === $user->email));$exceptions = [];
+            $shipments = array_values(array_filter($allShipments, fn($s) => $s['owner'] === $user->email));
+            $customerShipmentNumbers = array_column($shipments, 'number');
+            $exceptions = array_values(array_filter(
+                $allExceptions,
+                fn($exception) => in_array($exception['shipment'], $customerShipmentNumbers, true)
+            ));
         } else {
-            $shipments =$allShipments;
-            $exceptions = [
-                ['id' => 101, 'shipment' => 'CT-DEMO-0002', 'type' => 'CUSTOMS_HOLD', 'severity' => 'HIGH', 'status' => 'OPEN', 'reported' => '2026-11-07 14:29:13', 'description' => 'Container flagged for physical inspection at port verification unit.'],
-                ['id' => 102, 'shipment' => 'CT-DEMO-0003', 'type' => 'WEATHER_DELAY', 'severity' => 'MEDIUM', 'status' => 'INVESTIGATING', 'reported' => '2026-11-08 09:15:00', 'description' => 'Severe typhoons causing 18-hour vessel re-routing.'],
-                ['id' => 103, 'shipment' => 'CT-DEMO-0001', 'type' => 'PORT_CONGESTION', 'severity' => 'LOW', 'status' => 'RESOLVED', 'reported' => '2026-11-05 11:00:00', 'description' => 'Berth delay resolved; vessel anchored successfully.']
-            ];
+            $shipments = $allShipments;
+            $exceptions = $allExceptions;
         }
 
         $totalShipments = count($shipments);
@@ -99,6 +105,19 @@ class DashboardController extends Controller
             ['title' => 'Status Updated', 'text' => 'Shipment CT-DEMO-0004 marked as DELIVERED.', 'time' => '1 hari lalu', 'unread' => false],
             ['title' => 'Weather Alert', 'text' => 'Typhoon alert near Malacca Strait affecting route CT-DEMO-0003.', 'time' => '2 hari lalu', 'unread' => false]
         ];
+
+        if ($userRole === 'CUSTOMER') {
+            $customerShipmentNumbers = array_column($shipments, 'number');
+            $notifications = array_values(array_filter($notifications, function ($notification) use ($customerShipmentNumbers) {
+                foreach ($customerShipmentNumbers as $shipmentNumber) {
+                    if (str_contains($notification['text'], $shipmentNumber)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }));
+        }
 
         return view('welcome', compact(
             'userName',

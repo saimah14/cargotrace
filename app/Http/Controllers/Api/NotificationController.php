@@ -13,7 +13,9 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $query = $user->userNotifications()->latest();
+        $query = $user->userNotifications()
+            ->with('shipment:id,shipment_number')
+            ->latest();
 
         if ($request->boolean('unread')) {
             $query->whereNull('read_at');

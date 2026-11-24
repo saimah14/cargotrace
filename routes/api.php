@@ -21,10 +21,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
 
     // Data live dari API luar (semua user yang login)
-    Route::get('/rates', [ExternalController::class, 'rates']);
     Route::get('/currencies', [StatsController::class, 'currencies']);
     Route::get('/weather', [ExternalController::class, 'weather']);
+    Route::get('/countries', [ExternalController::class, 'countries']);
     Route::get('/news', [ExternalController::class, 'news']);
+    Route::get('/rates', [ExternalController::class, 'rates'])->middleware('throttle:30,1');
 
     // Notifikasi (milik user sendiri)
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -34,6 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard (JSON untuk kartu angka dan grafik)
     Route::get('/dashboard', [StatsController::class, 'dashboard'])
         ->middleware('role:admin,operator');
+
+    Route::get('/tracking', [TrackingController::class, 'list']);
 
     // Audit log: admin saja
     Route::get('/audit-logs', [AuditLogController::class, 'index'])
@@ -92,6 +95,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('role:admin,operator');
 
     // Exceptions
+    Route::get('exceptions', [ExceptionController::class, 'list']);
+
     Route::get('shipments/{shipment}/exceptions', [ExceptionController::class, 'index']);
 
     Route::post('shipments/{shipment}/exceptions', [ExceptionController::class, 'store'])
