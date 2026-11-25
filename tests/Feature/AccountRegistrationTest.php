@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -68,5 +69,19 @@ class AccountRegistrationTest extends TestCase
             'password' => $credentials['password'],
         ])->assertRedirect('/');
         $this->assertAuthenticated();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)
+            ->getJson('/api/users')
+            ->assertOk()
+            ->assertJsonFragment([
+                'email' => 'api-customer@example.com',
+                'role' => User::ROLE_CUSTOMER,
+            ]);
+
+        $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $this->actingAs($customer)
+            ->getJson('/api/users')
+            ->assertForbidden();
     }
 }
